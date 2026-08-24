@@ -20,6 +20,20 @@ export default defineConfig(({ mode }) => {
        * contract does not change.
        */
       proxy: {
+        /**
+         * The events API authenticates with a query parameter rather than a header, so
+         * the key is appended during the rewrite. Same reasoning as the places proxy:
+         * it stays server-side and out of the client bundle.
+         */
+        '/api/tm': {
+          target: 'https://app.ticketmaster.com',
+          changeOrigin: true,
+          rewrite: (path) => {
+            const rest = path.replace(/^\/api\/tm/, '')
+            const sep = rest.includes('?') ? '&' : '?'
+            return `${rest}${sep}apikey=${encodeURIComponent(env.TM_KEY ?? '')}`
+          },
+        },
         '/api/fsq': {
           target: 'https://places-api.foursquare.com',
           changeOrigin: true,
@@ -34,6 +48,6 @@ export default defineConfig(({ mode }) => {
     },
     // The end-to-end test runs in Node, where there is no proxy, so it reads the key
     // from the environment directly.
-    test: { env: { FSQ_KEY: env.FSQ_KEY ?? '' } },
+    test: { env: { FSQ_KEY: env.FSQ_KEY ?? '', TM_KEY: env.TM_KEY ?? '' } },
   }
 })

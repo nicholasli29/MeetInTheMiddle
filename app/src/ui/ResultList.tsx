@@ -1,8 +1,32 @@
-import type { Origin, ScoredCandidate } from '../core/types'
+import type { Candidate, Origin, ScoredCandidate } from '../core/types'
 import { CATEGORY_BY_KEY } from '../providers/categories'
 import { AXIS_COLOURS, AXIS_LABELS, ORIGIN_COLOURS } from './theme'
 
 const mins = (n: number | null) => (n === null ? '–' : String(Math.round(n)))
+
+/** "7:30 pm · Oakland Arena" */
+function eventLine(e: NonNullable<Candidate['event']>): string {
+  const bits: string[] = []
+  if (e.localTime) {
+    const [h, m] = e.localTime.split(':').map(Number)
+    bits.push(new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }))
+  } else {
+    bits.push('time to be announced')
+  }
+  if (e.venueName) bits.push(e.venueName)
+  return bits.join(' · ')
+}
+
+/**
+ * Price is published for a minority of events, so its absence is stated rather than
+ * hidden behind a blank or a zero that would read as free.
+ */
+function eventPrice(e: NonNullable<Candidate['event']>): string {
+  if (e.priceMin === null) return 'price not listed'
+  const sym = e.currency === 'USD' ? '$' : `${e.currency ?? ''} `
+  if (e.priceMax === null || e.priceMax === e.priceMin) return `${sym}${e.priceMin}`
+  return `${sym}${e.priceMin}–${sym}${e.priceMax}`
+}
 
 /** Stacked bar showing how much each axis contributed to the total. */
 function ContributionBar({ r }: { r: ScoredCandidate }) {
@@ -96,6 +120,9 @@ export function ResultList({
                     </span>
                   )}
                 </div>
+                {r.candidate.event && (
+                  <div className="mt-0.5 text-[11px] text-[#9fb0c0]">{eventLine(r.candidate.event)}</div>
+                )}
                 <div className="mt-1.5"><ContributionBar r={r} /></div>
                 <div className="mt-1.5 text-[11px] text-[#8b9aa9] leading-snug">
                   {explain(r, partial)}
@@ -138,6 +165,19 @@ export function ResultList({
                   </div>
                 )}
 
+                {r.candidate.event && (
+                  <div className="flex flex-wrap gap-1">
+                    {r.candidate.event.genre && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4aa8ff]/15 text-[#9ccfff]">
+                        {r.candidate.event.genre}
+                      </span>
+                    )}
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a232e] text-[#9fb0c0]">
+                      {eventPrice(r.candidate.event)}
+                    </span>
+                  </div>
+                )}
+
                 {r.candidate.address && (
                   <div className="text-[10px] text-[#5f6f7e]">{r.candidate.address}</div>
                 )}
@@ -151,7 +191,8 @@ export function ResultList({
                   </a>
                 )}
                 <div className="text-[10px] text-[#5f6f7e] pt-0.5">
-                  {kind === 'hotel' ? 'Hotel' : 'Venue'} · score {r.total.toFixed(3)}
+                  {kind === 'hotel' ? 'Hotel' : kind === 'event' ? r.candidate.event?.segment ?? 'Event' : 'Venue'}
+                  {' · score '}{r.total.toFixed(3)}
                 </div>
               </div>
             )}

@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { runPlan, type PlanResult } from './core/plan'
 import { rank } from './core/score'
 import type { Kind, Origin, Weights } from './core/types'
-import { AgendaChips, KindTabs, OriginPanel, WeightSliders } from './ui/Controls'
+import { AgendaChips, EventDate, KindTabs, OriginPanel, WeightSliders } from './ui/Controls'
 import { MapView } from './ui/MapView'
 import type { GeocodeResult } from './providers/geocode'
+import { todayLocalISO } from './providers/ticketmaster'
 import { ResultList } from './ui/ResultList'
 
 const DEFAULT_WEIGHTS: Weights = { speed: 0.4, fairness: 0.35, agenda: 0.25 }
@@ -39,6 +40,8 @@ export default function App() {
   const [agendaKeys, setAgendaKeys] = useState<string[]>([])
   const [weights, setWeights] = useState<Weights>(DEFAULT_WEIGHTS)
   const [addMode, setAddMode] = useState(true)
+  // Today in the viewer's own timezone, not the machine's UTC date.
+  const [eventDate, setEventDate] = useState(() => todayLocalISO())
 
   const [plan, setPlan] = useState<PlanResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -73,7 +76,7 @@ export default function App() {
       setLoading(true)
       setError(null)
 
-      runPlan({ origins, kind, agendaKeys, weights: DEFAULT_WEIGHTS }, ac.signal)
+      runPlan({ origins, kind, agendaKeys, weights: DEFAULT_WEIGHTS, eventDate }, ac.signal)
         .then((res) => { if (!ac.signal.aborted) { setPlan(res); setSelectedId(null) } })
         .catch((e: unknown) => {
           if (ac.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
@@ -84,7 +87,7 @@ export default function App() {
     }, 450) // fold a burst of pin drags or slider moves into one request
 
     return () => { if (timer.current) clearTimeout(timer.current) }
-  }, [origins, kind, agendaKeys])
+  }, [origins, kind, agendaKeys, eventDate])
 
   // Re-ranking on a weight change is pure computation over what was already fetched.
   const results = useMemo(
@@ -208,11 +211,15 @@ export default function App() {
         <div className="rounded-lg border border-[#1e2936] bg-[#111820] p-3 space-y-2">
           <KindTabs kind={kind} onChange={setKind} />
 
+          {kind === 'event' && <EventDate date={eventDate} onChange={setEventDate} />}
+
           <div className="text-[11px] text-[#7d8b9a] min-h-[16px]">
             {loading && 'Working out where you can all get to…'}
             {!loading && origins.length < 2 && 'Add at least two starting points.'}
             {!loading && origins.length >= 2 && results.length > 0 &&
-              `${results.length} ${kind === 'hotel' ? 'hotels' : 'venues'} everyone can reach.`}
+              `${results.length} ${
+                kind === 'hotel' ? 'hotels' : kind === 'event' ? 'events' : 'venues'
+              } everyone can reach.`}
           </div>
 
           {error && (

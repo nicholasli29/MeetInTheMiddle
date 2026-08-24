@@ -19,6 +19,22 @@ export interface Origin {
 
 export const MAX_CONTOUR_MINUTES = 60
 
+/** Detail carried only by events, which have a "when" the other kinds do not. */
+export interface EventInfo {
+  /** Calendar date in the event's own local time (YYYY-MM-DD). */
+  localDate: string
+  /** Local start time, or null when no specific time is published. */
+  localTime: string | null
+  url: string
+  venueName: string | null
+  segment: string | null
+  genre: string | null
+  /** Published for a minority of events; shown when present, never scored on. */
+  priceMin: number | null
+  priceMax: number | null
+  currency: string | null
+}
+
 export interface Candidate {
   id: string
   name: string
@@ -39,6 +55,7 @@ export interface Candidate {
   rating: number | null
   ratingCount: number
   openNow: boolean | null
+  event?: EventInfo
 }
 
 /** Travel facts for one candidate, index-aligned with the origins used to score it. */

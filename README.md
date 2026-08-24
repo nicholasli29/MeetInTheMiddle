@@ -1,8 +1,8 @@
 # Meet in the Middle
 
 A group enters where each person is starting from and how far they're willing to travel.
-The app works out each person's reachable area, intersects them, and **ranks** the venues
-and hotels inside the shared area.
+The app works out each person's reachable area, intersects them, and **ranks** the venues,
+hotels and events inside the shared area.
 
 Drawing a shared travel zone is the easy half — other tools already do it, and you're
 left staring at a shaded blob still arguing about where inside it to go. The useful half
@@ -21,6 +21,7 @@ Create `app/.env.local`:
 ```
 VITE_MAPBOX_TOKEN=pk....   # public token, safe in the client
 FSQ_KEY=...                # deliberately not VITE_ prefixed — see "Why there's a proxy"
+TM_KEY=...                 # events key, same reasoning
 ```
 
 ```bash
@@ -30,7 +31,9 @@ npm run lint
 ```
 
 Add starting points by **searching for a place or address**, or by clicking the map.
-Press **Load an example** for a worked scenario.
+Press **Load an example** for a worked scenario. Results come in three tabs — venues,
+hotels and events. Events additionally take a date, since they have a "when" the other
+two don't.
 
 ## The scoring model
 
@@ -41,6 +44,9 @@ Three axes, combined with weights the user controls:
 | **Speed** | Shortest average trip across the group | Travel matrix |
 | **Fairness** | Smallest gap between the longest and shortest trip | Travel matrix |
 | **Agenda** | Density of the chosen activity types within a walk | Place categories |
+
+The same three axes apply to all three tabs. For an event, the agenda axis measures what
+is walkable from the venue it is held at.
 
 **Speed and fairness are deliberately separate objectives.** They conflict, and the
 conflict is the point: somewhere two people reach in five minutes and a third reaches in
@@ -100,6 +106,24 @@ attributed to the query that produced them instead.
 
 **Public transport is not available.** Only driving, cycling and walking. See below.
 
+**Past dates return nothing.** Obvious in hindsight, but the empty state initially blamed
+midweek sparsity — advice that is plainly wrong when the date the user picked was a
+Saturday that has already been and gone. The picker now refuses past dates rather than
+explaining them after the fact.
+
+**Event listings thin out sharply midweek.** In the same area on the same search, a Monday
+returned 4 events and a Saturday returned 26. The empty state says so rather than implying
+the area is dead.
+
+**Event prices are published for a minority of listings** — between a fifth and a third in
+the days sampled. Price is therefore shown when present and labelled "price not listed"
+when absent, never scored on. A field missing that often is not a ranking signal.
+
+**Event dates must be filtered in the event's own local time.** The API supports that
+directly. Building a UTC window from the chosen day instead would shift both boundaries by
+the offset — an 8pm show is already the next day in UTC — silently dropping late-night
+events and pulling in the previous evening's.
+
 **The older geocoder barely knows places.** Searching "oracle park" there returns Oracle
 Parkway — a street in another city — and never the stadium. Starting points are named far
 more often than they are addressed, so the search endpoint is used instead, which finds
@@ -126,6 +150,7 @@ src/
   providers/
     isochrone.ts, matrix.ts   reachable areas and travel times
     foursquare.ts             place search and agenda lookups
+    ticketmaster.ts           event search
     geocode.ts                place and address lookup
     categories.ts             verified category ids
   ui/
@@ -167,10 +192,10 @@ per-category fetch, rather than a per-candidate lookup that would have forced an
 - **A single starting point isn't validated.** The routability check runs when a plan is
   computed, which needs two points, so one pin in the water sits unflagged until a second
   is added. There are no results to be wrong yet, but the feedback is late.
-- **Events.** A ticketing provider would add a third result kind, along with a date
-  dimension the other two don't have.
 - **Budget.** Price is a premium field on the places API and isn't requested; the ranking
   runs entirely on free-tier data.
+- **A date applies to events only.** Venues and hotels have no opening-hours filter here,
+  so a global date control would imply a filter two of the three tabs cannot honour.
 - **At most 50 results per search**, so dense areas are sampled rather than exhaustive.
 - **The proxy is dev-only** and needs a serverless equivalent to deploy.
 - Desktop layout only.

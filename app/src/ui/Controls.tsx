@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { MAX_CONTOUR_MINUTES, type Kind, type Mode, type Origin, type Weights } from '../core/types'
 import { geocode, type GeocodeResult } from '../providers/geocode'
+import { todayLocalISO } from '../providers/ticketmaster'
 import { AGENDA_CATEGORIES } from '../providers/categories'
 import { AXIS_COLOURS, AXIS_LABELS, ORIGIN_COLOURS } from './theme'
 
@@ -214,6 +215,7 @@ export function KindTabs({ kind, onChange }: { kind: Kind; onChange: (k: Kind) =
   const tabs: { value: Kind; label: string }[] = [
     { value: 'venue', label: 'Venues' },
     { value: 'hotel', label: 'Hotels' },
+    { value: 'event', label: 'Events' },
   ]
   return (
     <div className="flex gap-1">
@@ -314,6 +316,48 @@ export function WeightSliders({
         Speed favours the shortest average trip. Fairness favours the smallest gap between the
         longest and shortest.
       </p>
+    </div>
+  )
+}
+
+/**
+ * Date picker for the events tab only.
+ *
+ * Venues and hotels have no "when" here, so a date control shown for all three would
+ * imply a filter two of them cannot honour.
+ */
+export function EventDate({ date, onChange }: { date: string; onChange: (d: string) => void }) {
+  // Past dates return nothing, so they are not offered. Without this the empty state has
+  // to explain an absence that is really just "that day has been and gone" — and the
+  // advice it would give ("try a weekend") is wrong when the past date was a Saturday.
+  const today = todayLocalISO()
+  const atEarliest = date <= today
+
+  const shift = (days: number) => {
+    // Parsed at local noon so a day step never lands on a clock change and moves by
+    // twenty-three or twenty-five hours instead of one calendar day.
+    const [y, m, d] = date.split('-').map(Number)
+    const dt = new Date(y, m - 1, d, 12)
+    dt.setDate(dt.getDate() + days)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    onChange(`${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`)
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => shift(-1)}
+        disabled={atEarliest}
+        aria-label="Previous day"
+        className="px-2 py-1 rounded border border-[#2a3746] text-[#9fb0c0] hover:border-[#3d5064] text-xs disabled:opacity-30 disabled:hover:border-[#2a3746]"
+      >‹</button>
+      <input
+        type="date" value={date} min={today}
+        onChange={(e) => e.target.value && e.target.value >= today && onChange(e.target.value)}
+        className="flex-1 bg-[#0d141b] border border-[#2a3746] rounded px-2 py-1 text-xs text-[#cfe0ee] outline-none focus:border-[#3d5064] [color-scheme:dark]"
+      />
+      <button onClick={() => shift(1)} aria-label="Next day"
+        className="px-2 py-1 rounded border border-[#2a3746] text-[#9fb0c0] hover:border-[#3d5064] text-xs">›</button>
     </div>
   )
 }

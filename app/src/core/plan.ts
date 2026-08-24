@@ -8,6 +8,7 @@ import { fetchAgendaPlaces, fetchCandidates, type Bbox } from '../providers/four
 import {
   CATEGORY_BY_KEY, DEFAULT_VENUE_CATEGORY_IDS, HOTEL_CATEGORY_ID,
 } from '../providers/categories'
+import { fetchEvents, todayLocalISO } from '../providers/ticketmaster'
 
 /** Roughly a fifteen minute walk — the radius agenda density is measured over. */
 export const WALK_RADIUS_M = 1200
@@ -19,6 +20,8 @@ export interface PlanRequest {
   kind: Kind
   agendaKeys: string[]
   weights: Weights
+  /** Local calendar date (YYYY-MM-DD). Only meaningful when kind is 'event'. */
+  eventDate?: string
 }
 
 export interface PlanResult {
@@ -87,7 +90,7 @@ function agendaFactsFor(
  * the geometric filter rather than for everything the search returned.
  */
 export async function runPlan(req: PlanRequest, signal?: AbortSignal): Promise<PlanResult> {
-  const { origins, kind, agendaKeys, weights } = req
+  const { origins, kind, agendaKeys, weights, eventDate } = req
 
   const zones = await fetchIsochrones(origins, signal)
 
@@ -136,7 +139,9 @@ export async function runPlan(req: PlanRequest, signal?: AbortSignal): Promise<P
     .filter((c): c is NonNullable<typeof c> => !!c)
 
   const [rawCandidates, agendaPlaces] = await Promise.all([
-    fetchCandidates(bbox, categoryIdsFor(kind, agendaKeys), kind, signal),
+    kind === 'event'
+      ? fetchEvents(bbox, eventDate ?? todayLocalISO(), signal)
+      : fetchCandidates(bbox, categoryIdsFor(kind, agendaKeys), kind, signal),
     agendaCategories.length
       ? fetchAgendaPlaces(bbox, agendaCategories, signal)
       : Promise.resolve({ byCategory: new Map(), empty: [] }),
@@ -148,7 +153,11 @@ export async function runPlan(req: PlanRequest, signal?: AbortSignal): Promise<P
     return {
       zones, overlap: best.zone, includedOrigins, excludedOrigins, unroutableOrigins,
       inputs: [], results: [], emptyCategories: agendaPlaces.empty,
-      note: 'Nothing matching was found in the shared area. Try another tab or a wider agenda.',
+      note: kind === 'event'
+        ? (eventDate ?? '') < todayLocalISO()
+          ? 'That date has already passed, so nothing is listed for it.'
+          : 'No events in the shared area on that date. Listings thin out midweek — try a weekend.'
+        : 'Nothing matching was found in the shared area. Try another tab or a wider agenda.',
     }
   }
 
