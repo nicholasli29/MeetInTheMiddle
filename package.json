@@ -1,0 +1,12 @@
+{
+  "name": "meet-in-the-middle",
+  "private": true,
+  "description": "Root shim so the dev server and tests can be run from the repository root.",
+  "scripts": {
+    "dev": "cd app && npm run dev",
+    "build": "cd app && npm run build",
+    "test": "cd app && npm test",
+    "test:live": "cd app && npx vitest run plan.live",
+    "lint": "cd app && npx oxlint src"
+  }
+}
