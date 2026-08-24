@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import type { Zone } from '../core/geo'
 import type { Origin, ScoredCandidate } from '../core/types'
@@ -25,6 +25,16 @@ export function MapView(props: Props) {
   const map = useRef<mapboxgl.Map | null>(null)
   const markers = useRef(new Map<string, mapboxgl.Marker>())
   const ready = useRef(false)
+  /**
+   * Bumped whenever a map instance is built.
+   *
+   * Markers belong to the map they were added to, so when the map is replaced -- which
+   * React does on every mount in development -- the old ones are gone and the effect
+   * that creates them has to run again. Without this it only re-runs when the starting
+   * points change, so a plan that already had them at mount ends up with none: the
+   * panel lists them and the map shows nothing.
+   */
+  const [mapVersion, setMapVersion] = useState(0)
 
   // Latest props, readable from handlers the map holds on to. Kept out of the map
   // effect's dependencies so the map is not rebuilt on every parent render, and
@@ -74,6 +84,8 @@ export function MapView(props: Props) {
       zoom: 8.6,
     })
     map.current = m
+    markers.current.clear() // the previous map took its markers with it
+    setMapVersion((v) => v + 1)
 
     const initLayers = () => {
       // Idempotent: whichever signal arrives first wins and later ones do nothing.
@@ -177,7 +189,7 @@ export function MapView(props: Props) {
       const cur = marker.getLngLat()
       if (cur.lng !== o.lng || cur.lat !== o.lat) marker.setLngLat([o.lng, o.lat])
     })
-  }, [props.origins])
+  }, [props.origins, mapVersion])
 
   useEffect(sync, [props.zones, props.overlap, props.results, props.selectedId])
 

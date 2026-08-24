@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { runPlan, type PlanResult } from './core/plan'
 import { rank } from './core/score'
+import { decodePlan, encodePlan } from './core/share'
 import type { Kind, Origin, Weights } from './core/types'
 import { AgendaChips, EventDate, KindTabs, OriginPanel, WeightSliders } from './ui/Controls'
 import { MapView } from './ui/MapView'
@@ -35,13 +36,18 @@ const EXAMPLE: Omit<Origin, 'id'>[] = [
 const MAX_ORIGINS = NAMES.length
 
 export default function App() {
-  const [origins, setOrigins] = useState<Origin[]>([])
-  const [kind, setKind] = useState<Kind>('venue')
-  const [agendaKeys, setAgendaKeys] = useState<string[]>([])
-  const [weights, setWeights] = useState<Weights>(DEFAULT_WEIGHTS)
-  const [addMode, setAddMode] = useState(true)
+  // A link carries the whole plan, so an app opened from one starts with it rather than
+  // empty. Read once, at mount; the address bar is kept current from here on.
+  const shared = useMemo(() => decodePlan(window.location.search), [])
+
+  const [origins, setOrigins] = useState<Origin[]>(shared?.origins ?? [])
+  const [kind, setKind] = useState<Kind>(shared?.kind ?? 'venue')
+  const [agendaKeys, setAgendaKeys] = useState<string[]>(shared?.agendaKeys ?? [])
+  const [weights, setWeights] = useState<Weights>(shared?.weights ?? DEFAULT_WEIGHTS)
+  const [addMode, setAddMode] = useState(!shared)
   // Today in the viewer's own timezone, not the machine's UTC date.
-  const [eventDate, setEventDate] = useState(() => todayLocalISO())
+  const [eventDate, setEventDate] = useState(() => shared?.eventDate ?? todayLocalISO())
+  const [copied, setCopied] = useState(false)
 
   const [plan, setPlan] = useState<PlanResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -88,6 +94,30 @@ export default function App() {
 
     return () => { if (timer.current) clearTimeout(timer.current) }
   }, [origins, kind, agendaKeys, eventDate])
+
+  /**
+   * Keep the address bar in step with the plan.
+   *
+   * replaceState rather than pushState: every slider nudge would otherwise become a
+   * history entry, and the back button would crawl through them instead of leaving the
+   * app.
+   */
+  useEffect(() => {
+    const qs = origins.length
+      ? `?${encodePlan({ origins, kind, agendaKeys, weights, eventDate })}`
+      : window.location.pathname
+    window.history.replaceState(null, '', qs)
+  }, [origins, kind, agendaKeys, weights, eventDate])
+
+  const copyLink = useCallback(() => {
+    navigator.clipboard.writeText(window.location.href).then(
+      () => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1800)
+      },
+      () => { /* clipboard refused: the link is in the address bar regardless */ },
+    )
+  }, [])
 
   // Re-ranking on a weight change is pure computation over what was already fetched.
   const results = useMemo(
@@ -172,10 +202,23 @@ export default function App() {
 
       <div className="absolute top-0 left-0 bottom-0 w-[330px] p-3 overflow-y-auto space-y-2.5">
         <div className="rounded-lg border border-[#1e2936] bg-[#111820] px-3 py-2.5">
-          <h1 className="text-sm font-semibold tracking-tight">Meet in the Middle</h1>
-          <p className="text-[11px] text-[#7d8b9a] mt-0.5 leading-snug">
-            Where you can all get to — ranked by speed, fairness and what’s nearby.
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold tracking-tight">Meet in the Middle</h1>
+              <p className="text-[11px] text-[#7d8b9a] mt-0.5 leading-snug">
+                Where you can all get to — ranked by speed, fairness and what’s nearby.
+              </p>
+            </div>
+            {origins.length > 0 && (
+              <button
+                onClick={copyLink}
+                title="Copy a link that reopens this plan"
+                className="shrink-0 text-[11px] px-2 py-1 rounded border border-[#2a3746] text-[#9fb0c0] hover:border-[#3d5064] hover:text-[#cfe0ee] transition"
+              >
+                {copied ? 'Copied' : 'Share'}
+              </button>
+            )}
+          </div>
         </div>
 
         <OriginPanel

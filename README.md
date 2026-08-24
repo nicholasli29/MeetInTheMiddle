@@ -31,8 +31,8 @@ npm run lint
 ```
 
 Add starting points by **searching for a place or address**, or by clicking the map.
-Press **Load an example** for a worked scenario. Results come in three tabs — venues,
-hotels and events. Events additionally take a date, since they have a "when" the other
+Press **Load an example** for a worked scenario, or **Share** to copy a link that reopens
+the plan exactly as it stands. Results come in three tabs — venues, hotels and events. Events additionally take a date, since they have a "when" the other
 two don't.
 
 ## The scoring model
@@ -147,6 +147,7 @@ src/
     geo.ts       N-way intersection, partial-group fallback, point-in-polygon
     score.ts     normalisation, the three axes, weighting, ranking
     plan.ts      orchestration: area -> candidates -> travel times -> score
+    share.ts     encode and decode a plan as a query string
   providers/
     isochrone.ts, matrix.ts   reachable areas and travel times
     foursquare.ts             place search and agenda lookups
@@ -180,7 +181,14 @@ per-category fetch, rather than a per-candidate lookup that would have forced an
   else. Those are reported and excluded rather than silently dragging the answer.
 - **Nothing is invented.** Where a field isn't available, the interface says so rather
   than substituting an average that would read as real.
-- **No seed data on load.** The app opens empty; the example sits behind a button.
+- **No seed data on load.** The app opens empty; the example sits behind a button — unless
+  the link carries a plan, in which case it opens with that.
+- **Sharing needs no storage, accounts or server.** A plan is small enough to live in the
+  query string, so a link is the whole feature. The trade is that a link is a snapshot of
+  the inputs, not of the results: reopening it recomputes against live data, so a venue
+  that has since closed will not reappear. Every field is validated on the way back in,
+  because a link can be hand-edited or truncated by whatever carried it, and a broken one
+  should open the ordinary empty app rather than half a plan.
 
 ## Known gaps
 
