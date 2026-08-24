@@ -29,6 +29,12 @@ export interface PlanResult {
   includedOrigins: number[]
   excludedOrigins: number[]
   /**
+   * Starting points that could not be routed from where they were placed — a click in
+   * water or open country. Routing snaps to the nearest road, so these otherwise
+   * produce a reachable area somewhere else entirely and quietly distort the result.
+   */
+  unroutableOrigins: number[]
+  /**
    * Everything needed to re-rank without touching the network. Moving a weight slider
    * is a pure recomputation over these, which is what makes it respond immediately
    * instead of refetching reachable areas and travel times.
@@ -85,17 +91,44 @@ export async function runPlan(req: PlanRequest, signal?: AbortSignal): Promise<P
 
   const zones = await fetchIsochrones(origins, signal)
 
-  const best = bestOverlap(zones)
-  if (!best) {
-    return {
-      zones, overlap: null, includedOrigins: [], excludedOrigins: origins.map((_, i) => i),
-      inputs: [], results: [], emptyCategories: [],
-      note: 'No two of these starting points can reach anywhere in common. Try longer travel times.',
-    }
+  /**
+   * A starting point should fall inside the area reachable from it. When it does not,
+   * routing snapped the click to a road some distance away — the usual cause being a
+   * point dropped in water — and the area returned describes somewhere else.
+   */
+  const routable: number[] = []
+  const unroutableOrigins: number[] = []
+  origins.forEach((o, i) => {
+    (containsPoint(zones[i], o.lng, o.lat) ? routable : unroutableOrigins).push(i)
+  })
+
+  const emptyResult = (note: string): PlanResult => ({
+    zones, overlap: null, includedOrigins: [], excludedOrigins: origins.map((_, i) => i),
+    unroutableOrigins, inputs: [], results: [], emptyCategories: [], note,
+  })
+
+  if (routable.length < 2) {
+    return emptyResult(
+      unroutableOrigins.length > 0
+        ? 'Some starting points are not reachable by road. Move them onto a street.'
+        : 'Add at least two starting points that can be routed.',
+    )
   }
 
+  // Only routable starting points shape the shared area; a snapped one would drag it
+  // somewhere nobody asked about.
+  const routableZones = routable.map((i) => zones[i])
+  const bestOfRoutable = bestOverlap(routableZones)
+  if (!bestOfRoutable) {
+    return emptyResult('No two of these starting points can reach anywhere in common. Try longer travel times.')
+  }
+  // bestOverlap indexes into routableZones, so map back to the caller's numbering.
+  const best = { zone: bestOfRoutable.zone, indices: bestOfRoutable.indices.map((i) => routable[i]) }
+
   const includedOrigins = best.indices
-  const excludedOrigins = origins.map((_, i) => i).filter((i) => !includedOrigins.includes(i))
+  const excludedOrigins = origins
+    .map((_, i) => i)
+    .filter((i) => !includedOrigins.includes(i) && !unroutableOrigins.includes(i))
   const bbox = bboxOf(best.zone) as Bbox
 
   const agendaCategories = agendaKeys
@@ -113,7 +146,7 @@ export async function runPlan(req: PlanRequest, signal?: AbortSignal): Promise<P
   const inZone = rawCandidates.filter((c) => containsPoint(best.zone, c.lng, c.lat))
   if (inZone.length === 0) {
     return {
-      zones, overlap: best.zone, includedOrigins, excludedOrigins,
+      zones, overlap: best.zone, includedOrigins, excludedOrigins, unroutableOrigins,
       inputs: [], results: [], emptyCategories: agendaPlaces.empty,
       note: 'Nothing matching was found in the shared area. Try another tab or a wider agenda.',
     }
@@ -137,6 +170,7 @@ export async function runPlan(req: PlanRequest, signal?: AbortSignal): Promise<P
     overlap: best.zone,
     includedOrigins,
     excludedOrigins,
+    unroutableOrigins,
     inputs: reachable,
     results: rank(reachable, weights, agendaKeys),
     emptyCategories: agendaPlaces.empty,
