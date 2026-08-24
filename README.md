@@ -31,8 +31,8 @@ npm run lint
 ```
 
 Add starting points by **searching for a place or address**, or by clicking the map.
-Press **Load an example** for a worked scenario, or **Share** to copy a link that reopens
-the plan exactly as it stands. Results come in three tabs — venues, hotels and events. Events additionally take a date, since they have a "when" the other
+Press **Load an example** for a worked scenario, **Share** to copy a link that reopens the plan
+exactly as it stands, or **Reset** to clear everything. Results come in three tabs — venues, hotels and events. Events additionally take a date, since they have a "when" the other
 two don't.
 
 ## The scoring model

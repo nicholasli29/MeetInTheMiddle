@@ -109,6 +109,24 @@ export default function App() {
     window.history.replaceState(null, '', qs)
   }, [origins, kind, agendaKeys, weights, eventDate])
 
+  /**
+   * Back to an empty map.
+   *
+   * Worth a control of its own now that a link carries the plan: opening a shared one
+   * leaves no way back to a blank slate except editing the address bar. Clearing the
+   * starting points also clears the query string, via the effect above.
+   */
+  const reset = useCallback(() => {
+    setOrigins([])
+    setAgendaKeys([])
+    setWeights(DEFAULT_WEIGHTS)
+    setKind('venue')
+    setEventDate(todayLocalISO())
+    setSelectedId(null)
+    setLimitHit(false)
+    setAddMode(true)
+  }, [])
+
   const copyLink = useCallback(() => {
     navigator.clipboard.writeText(window.location.href).then(
       () => {
@@ -210,13 +228,22 @@ export default function App() {
               </p>
             </div>
             {origins.length > 0 && (
-              <button
-                onClick={copyLink}
-                title="Copy a link that reopens this plan"
-                className="shrink-0 text-[11px] px-2 py-1 rounded border border-[#2a3746] text-[#9fb0c0] hover:border-[#3d5064] hover:text-[#cfe0ee] transition"
-              >
-                {copied ? 'Copied' : 'Share'}
-              </button>
+              <div className="flex gap-1 shrink-0">
+                <button
+                  onClick={copyLink}
+                  title="Copy a link that reopens this plan"
+                  className="text-[11px] px-2 py-1 rounded border border-[#2a3746] text-[#9fb0c0] hover:border-[#3d5064] hover:text-[#cfe0ee] transition"
+                >
+                  {copied ? 'Copied' : 'Share'}
+                </button>
+                <button
+                  onClick={reset}
+                  title="Clear everything and start again"
+                  className="text-[11px] px-2 py-1 rounded border border-[#2a3746] text-[#9fb0c0] hover:border-[#5c2a2a] hover:text-[#ff9d9d] transition"
+                >
+                  Reset
+                </button>
+              </div>
             )}
           </div>
         </div>
