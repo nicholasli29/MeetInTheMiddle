@@ -29,11 +29,13 @@ export interface Candidate {
   address?: string
   website?: string
   /**
-   * 1–4 tier, shown on the result card but not scored on. Absent for about a
-   * quarter of places, and never guessed at.
+   * Premium fields on the places API, left null on the free tier.
+   *
+   * Kept on the shape so the pieces that consume them — the rating tiebreak in the
+   * scoring engine, and the result card — need no change if they are ever enabled.
+   * Every consumer treats null as "unknown" rather than substituting a default.
    */
   price: number | null
-  /** 0–10, with the number of ratings behind it. */
   rating: number | null
   ratingCount: number
   openNow: boolean | null
