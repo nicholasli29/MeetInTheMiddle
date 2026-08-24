@@ -4,6 +4,7 @@ import { rank } from './core/score'
 import type { Kind, Origin, Weights } from './core/types'
 import { AgendaChips, KindTabs, OriginPanel, WeightSliders } from './ui/Controls'
 import { MapView } from './ui/MapView'
+import type { GeocodeResult } from './providers/geocode'
 import { ResultList } from './ui/ResultList'
 
 const DEFAULT_WEIGHTS: Weights = { speed: 0.4, fairness: 0.35, agenda: 0.25 }
@@ -91,14 +92,34 @@ export default function App() {
     [plan, weights, agendaKeys],
   )
 
-  const addOrigin = useCallback((lng: number, lat: number) => {
+  const addOrigin = useCallback((lng: number, lat: number, label?: string) => {
     setOrigins((prev) => {
       // Refusing quietly would make the control look broken; say why instead.
       if (prev.length >= MAX_ORIGINS) { setLimitHit(true); return prev }
-      const label = NAMES.find((n) => !prev.some((o) => o.label === n)) ?? `Person ${prev.length + 1}`
-      return [...prev, { id: crypto.randomUUID(), label, lng, lat, mode: 'driving', maxMinutes: 45 }]
+      const fallback = NAMES.find((n) => !prev.some((o) => o.label === n)) ?? `Person ${prev.length + 1}`
+      return [
+        ...prev,
+        { id: crypto.randomUUID(), label: label ?? fallback, lng, lat, mode: 'driving', maxMinutes: 45 },
+      ]
     })
   }, [])
+
+  /** A searched place keeps its own name, which reads better than "Alex" for a station. */
+  const addFromAddress = useCallback((r: GeocodeResult) => {
+    addOrigin(r.lng, r.lat, r.name)
+  }, [addOrigin])
+
+  /**
+   * Bias the search toward the middle of what is already placed, so a generic query
+   * resolves near the plan rather than somewhere unrelated.
+   */
+  const proximity = useMemo(() => {
+    if (origins.length === 0) return undefined
+    return {
+      lng: origins.reduce((a, o) => a + o.lng, 0) / origins.length,
+      lat: origins.reduce((a, o) => a + o.lat, 0) / origins.length,
+    }
+  }, [origins])
 
   const patchOrigin = useCallback((id: string, patch: Partial<Origin>) => {
     setOrigins((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))
@@ -160,6 +181,8 @@ export default function App() {
           onAddMode={setAddMode}
           onChange={patchOrigin}
           onRemove={removeOrigin}
+          onPickAddress={addFromAddress}
+          proximity={proximity}
         />
 
         {origins.length === 0 && (

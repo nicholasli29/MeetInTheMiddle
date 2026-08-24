@@ -29,7 +29,8 @@ npm run test:live   # end-to-end against the real APIs
 npm run lint
 ```
 
-Click the map to add starting points, or press **Load an example** for a worked scenario.
+Add starting points by **searching for a place or address**, or by clicking the map.
+Press **Load an example** for a worked scenario.
 
 ## The scoring model
 
@@ -99,6 +100,11 @@ attributed to the query that produced them instead.
 
 **Public transport is not available.** Only driving, cycling and walking. See below.
 
+**The older geocoder barely knows places.** Searching "oracle park" there returns Oracle
+Parkway — a street in another city — and never the stadium. Starting points are named far
+more often than they are addressed, so the search endpoint is used instead, which finds
+the stadium first.
+
 ## Why there's a proxy
 
 Not CORS — the places API returns permissive CORS headers and the browser could call it
@@ -120,6 +126,7 @@ src/
   providers/
     isochrone.ts, matrix.ts   reachable areas and travel times
     foursquare.ts             place search and agenda lookups
+    geocode.ts                place and address lookup
     categories.ts             verified category ids
   ui/
 ```
@@ -136,8 +143,10 @@ per-category fetch, rather than a per-candidate lookup that would have forced an
 ## Decisions worth naming
 
 - **A starting point is not a person.** It's a place, a travel mode and a time budget with
-  a label. Nothing in the engine assumes otherwise, so seeding from stations or landmarks
-  needs no change to the core.
+  a label. Nothing in the engine assumes otherwise — searching "Caltrain Millbrae" and
+  planning around the station already works, with no change to the core.
+- **Two ways to add a starting point.** Click the map when you know where somewhere is;
+  type when you know its name.
 - **An empty intersection is a designed state, not an error.** Groups frequently have no
   area everyone can reach. Returning nothing would be accurate and useless, so the app
   falls back to the largest subset that does overlap and names who was left out.

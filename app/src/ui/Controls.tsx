@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from 'react'
 import { MAX_CONTOUR_MINUTES, type Kind, type Mode, type Origin, type Weights } from '../core/types'
+import { geocode, type GeocodeResult } from '../providers/geocode'
 import { AGENDA_CATEGORIES } from '../providers/categories'
 import { AXIS_COLOURS, AXIS_LABELS, ORIGIN_COLOURS } from './theme'
 
@@ -14,14 +16,122 @@ const chip = 'text-[11px] px-2 py-1 rounded border transition'
 const chipOn = 'border-[#4aa8ff] bg-[#4aa8ff]/15 text-[#9ccfff]'
 const chipOff = 'border-[#2a3746] text-[#7d8b9a] hover:border-[#3d5064]'
 
+/**
+ * Type-to-search for a starting point.
+ *
+ * Clicking the map is precise but assumes you know where somewhere is; most people know
+ * a name instead. Results are biased toward the points already placed, so a generic
+ * query resolves near where the plan is happening.
+ */
+export function AddressSearch({
+  proximity, onPick,
+}: {
+  proximity?: { lng: number; lat: number }
+  onPick: (r: GeocodeResult) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<GeocodeResult[]>([])
+  const [active, setActive] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(false)
+  const abort = useRef<AbortController | null>(null)
+  const box = useRef<HTMLDivElement>(null)
+
+  // Depend on the coordinates, not the object: a parent rebuilding it each render would
+  // otherwise re-trigger the search continuously.
+  const pLng = proximity?.lng
+  const pLat = proximity?.lat
+  const q = query.trim()
+  const tooShort = q.length < 2
+
+  useEffect(() => {
+    if (tooShort) return
+    // Debounced so a typed word costs one request rather than one per keystroke.
+    const t = setTimeout(() => {
+      abort.current?.abort()
+      const ac = new AbortController()
+      abort.current = ac
+      setBusy(true)
+      const near = pLng !== undefined && pLat !== undefined ? { lng: pLng, lat: pLat } : undefined
+      geocode(q, { proximity: near, signal: ac.signal })
+        .then((r) => { if (!ac.signal.aborted) { setResults(r); setActive(0); setOpen(true) } })
+        .catch(() => { /* aborted or offline: leave the previous list alone */ })
+        .finally(() => { if (!ac.signal.aborted) setBusy(false) })
+    }, 300)
+    return () => clearTimeout(t)
+  }, [q, tooShort, pLng, pLat])
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [])
+
+  const choose = (r: GeocodeResult) => {
+    onPick(r)
+    setQuery('')
+    setResults([])
+    setOpen(false)
+  }
+
+  const showList = open && !tooShort && results.length > 0
+  const showEmpty = open && !tooShort && !busy && results.length === 0
+
+  return (
+    <div className="relative mb-2" ref={box}>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => results.length && setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, results.length - 1)) }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
+          else if (e.key === 'Enter' && showList && results[active]) { e.preventDefault(); choose(results[active]) }
+          else if (e.key === 'Escape') setOpen(false)
+        }}
+        placeholder="Search an address or place…"
+        className="w-full bg-[#0d141b] border border-[#2a3746] rounded px-2 py-1.5 text-xs text-[#cfe0ee] placeholder:text-[#5f6f7e] outline-none focus:border-[#3d5064]"
+      />
+      {busy && <span className="absolute right-2 top-1.5 text-[10px] text-[#5f6f7e]">…</span>}
+
+      {showList && (
+        <ul className="absolute z-20 left-0 right-0 mt-1 rounded-md border border-[#2a3746] bg-[#111820] shadow-lg overflow-hidden">
+          {results.map((r, i) => (
+            <li key={r.id}>
+              <button
+                onMouseEnter={() => setActive(i)}
+                onClick={() => choose(r)}
+                className={`w-full text-left px-2 py-1.5 transition ${i === active ? 'bg-[#4aa8ff]/15' : 'hover:bg-[#1a232e]'}`}
+              >
+                <div className="text-xs text-[#cfe0ee] truncate">{r.name}</div>
+                {r.context && <div className="text-[10px] text-[#7d8b9a] truncate">{r.context}</div>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {showEmpty && (
+        <div className="absolute z-20 left-0 right-0 mt-1 rounded-md border border-[#2a3746] bg-[#111820] px-2 py-1.5 text-[10px] text-[#7d8b9a]">
+          Nothing found for “{q}”.
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function OriginPanel({
-  origins, addMode, onAddMode, onChange, onRemove,
+  origins, addMode, onAddMode, onChange, onRemove, onPickAddress, proximity,
 }: {
   origins: Origin[]
   addMode: boolean
   onAddMode: (v: boolean) => void
   onChange: (id: string, patch: Partial<Origin>) => void
   onRemove: (id: string) => void
+  onPickAddress: (r: GeocodeResult) => void
+  proximity?: { lng: number; lat: number }
 }) {
   return (
     <div className={card}>
@@ -32,10 +142,12 @@ export function OriginPanel({
         </button>
       </div>
 
+      <AddressSearch proximity={proximity} onPick={onPickAddress} />
+
       {origins.length === 0 && (
         <p className="text-xs text-[#7d8b9a] leading-relaxed">
-          Add two or more starting points to find where you can all meet. A starting point is
-          just a place and a travel budget — a home, an office, a station.
+          Search above, or press <span className="text-[#9fb0c0]">+ Add</span> and click the map.
+          A starting point is just a place and a travel budget — a home, an office, a station.
         </p>
       )}
 
