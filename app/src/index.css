@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "mapbox-gl/dist/mapbox-gl.css";
 
 :root { color-scheme: dark; }
 
@@ -8,3 +9,24 @@ body {
   color: #e6edf3;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Range inputs are the primary control here, so they get styled rather than
+   inheriting whatever the platform provides. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: #24303d;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #e6edf3;
+  cursor: pointer;
+  border: 2px solid #0b0f14;
+}
+input[type="range"]:disabled { opacity: 0.4; }
